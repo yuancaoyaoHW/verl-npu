@@ -1,0 +1,14 @@
+# Pinned dependencies for verl-vllm container (vllm-ascend:v0.18.0)
+# CRITICAL: Do NOT upgrade these — vLLM 0.18.0 is incompatible with newer versions.
+#
+# Install with:
+#   pip install -r requirements-pinned.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+
+transformers==4.57.6
+huggingface-hub>=0.34.0,<1.0
+
+# Already in container, listed for reference:
+# vllm==0.18.0
+# vllm-ascend==0.18.0
+# torch==2.9.0
+# torch-npu==2.9.0
