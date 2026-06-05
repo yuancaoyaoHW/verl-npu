@@ -18,8 +18,6 @@
 
 set -euo pipefail
 
-export HF_TOKEN="${HF_TOKEN:-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}"
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 if [ -f "$PROJECT_DIR/.env" ]; then
