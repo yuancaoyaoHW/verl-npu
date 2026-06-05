@@ -18,6 +18,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+if [ -f "$PROJECT_DIR/.env" ]; then
+    source "$PROJECT_DIR/.env"
+fi
+
 DATASET_DIR="${DATASET_DIR:-$(pwd)/datasets}"
 mkdir -p "$DATASET_DIR"
 

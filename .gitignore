@@ -14,3 +14,4 @@ docker-build/verl-src/
 
 # Monitoring logs
 /tmp/*.log
+.env
