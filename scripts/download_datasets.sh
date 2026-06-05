@@ -21,17 +21,15 @@ set -euo pipefail
 DATASET_DIR="${DATASET_DIR:-$(pwd)/datasets}"
 mkdir -p "$DATASET_DIR"
 
-# Detect CLI: prefer hf, fallback to huggingface-cli, fallback to python
+# Detect CLI: prefer hf, fallback to python huggingface_hub
 download_hf() {
     local repo="$1"
     local dest="$2"
 
     if command -v hf &>/dev/null; then
         hf download "$repo" --repo-type dataset --local-dir "$dest" --resume-download
-    elif command -v huggingface-cli &>/dev/null; then
-        huggingface-cli download "$repo" --repo-type dataset --local-dir "$dest" --resume-download
     else
-        echo "  Using Python fallback..."
+        echo "  Using Python fallback (huggingface_hub)..."
         python3 -c "
 from huggingface_hub import snapshot_download
 snapshot_download(
