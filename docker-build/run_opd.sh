@@ -134,7 +134,7 @@ TRAINER=(
     trainer.log_val_generations=5
 )
 
-cd /tmp/verl
+cd /opt/verl
 python3 -m verl.trainer.main_ppo \
     "${DATA[@]}" \
     "${MODEL[@]}" \

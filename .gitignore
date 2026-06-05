@@ -1,26 +1,16 @@
-# Training outputs
-checkpoints/
-*.log
-outputs/
+# Large binary files
+*.tar.gz
 
-# Python
+# OpenCode internal
+.omo/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
-*.egg-info/
-dist/
-build/
 
-# Model weights (large files)
-*.safetensors
-*.bin
-*.pt
-*.pth
+# Docker build artifacts
+docker-build/verl-src/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
+# Monitoring logs
+/tmp/*.log

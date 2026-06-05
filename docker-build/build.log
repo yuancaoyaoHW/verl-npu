@@ -1,0 +1,75 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 579B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for quay.io/ascend/vllm-ascend:v0.18.0
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/7] FROM quay.io/ascend/vllm-ascend:v0.18.0@sha256:697175418772c65b56afc04a7ccde7c24e7ad15a988a852eb8239fa9b6298e24
+#4 resolve quay.io/ascend/vllm-ascend:v0.18.0@sha256:697175418772c65b56afc04a7ccde7c24e7ad15a988a852eb8239fa9b6298e24 0.0s done
+#4 DONE 0.2s
+
+#5 [internal] load build context
+#5 transferring context: 17.31MB 0.3s done
+#5 DONE 0.4s
+
+#6 [2/7] COPY verl-src/ /opt/verl/
+#6 DONE 0.4s
+
+#7 [3/7] COPY patches/ /opt/patches/
+#7 DONE 0.1s
+
+#8 [4/7] COPY apply-patches.sh /opt/
+#8 DONE 0.0s
+
+#9 [5/7] COPY run_opd.sh /root/
+#9 DONE 0.0s
+
+#10 [6/7] RUN cd /opt/verl && pip install -e . --no-deps &&     bash /opt/apply-patches.sh
+#10 0.954 Obtaining file:///opt/verl
+#10 0.957   Installing build dependencies: started
+#10 119.5   Installing build dependencies: still running...
+#10 125.9   Installing build dependencies: finished with status 'done'
+#10 125.9   Checking if build backend supports build_editable: started
+#10 126.4   Checking if build backend supports build_editable: finished with status 'done'
+#10 126.4   Getting requirements to build editable: started
+#10 126.9   Getting requirements to build editable: finished with status 'done'
+#10 126.9   Preparing editable metadata (pyproject.toml): started
+#10 127.3   Preparing editable metadata (pyproject.toml): finished with status 'done'
+#10 127.3 Building wheels for collected packages: verl
+#10 127.3   Building editable for verl (pyproject.toml): started
+#10 127.8   Building editable for verl (pyproject.toml): finished with status 'done'
+#10 127.8   Created wheel for verl: filename=verl-0.9.0.dev0-0.editable-py3-none-any.whl size=19147 sha256=f70da90812da911a6526c35fcc1d70912c03be287ea1a44f0c6ac01c0fdbf673
+#10 127.8   Stored in directory: /tmp/pip-ephem-wheel-cache-6y_0lvip/wheels/44/9c/8b/78559fad0123d36757b4ac3ecb45ed5b849d63204506560308
+#10 127.8 Successfully built verl
+#10 127.8 Installing collected packages: verl
+#10 127.8 Successfully installed verl-0.9.0.dev0
+#10 127.8 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#10 133.3 Applying verl patches...
+#10 133.3   [1/4] teacher_model.py - qwen3_5_moe CONFIG_MAPPING
+#10 133.3   [2/4] teacher_manager.py - precompute_prompt_logprobs
+#10 133.3   [3/4] agent_loop.py - split teacher logprobs
+#10 133.3   [4/4] ray_trainer.py - next-batch prefetch
+#10 133.3 All patches applied successfully.
+#10 DONE 133.3s
+
+#11 [7/7] WORKDIR /opt/verl
+#11 DONE 0.0s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.9s done
+#12 exporting manifest sha256:d8ce0c20e0480bc4fce27420cae82a1154a0846e7fe8d1d7686497878c6f8ad3 done
+#12 exporting config sha256:b6092fc62ffd44017f63ba6c3eb8ddceaf4c5bac33c19483fb40c625c73833aa done
+#12 exporting attestation manifest sha256:d7f7fb76d775e150a0a7cffe0ee93a66e7ca67c2c41c1cb0596709ea1d2eca99 done
+#12 exporting manifest list sha256:7e4446cc5695e19f7a64631e7fe75de2a55164cf692faec54376d93e4c67a3ec done
+#12 naming to docker.io/library/haidass-opd-npu:v5.1 done
+#12 unpacking to docker.io/library/haidass-opd-npu:v5.1
+#12 unpacking to docker.io/library/haidass-opd-npu:v5.1 0.5s done
+#12 DONE 1.5s
