@@ -64,7 +64,10 @@ from verl.utils.debug import marked_timer
 from verl.utils.import_utils import deprecated, load_class_from_fqn
 from verl.utils.metric import reduce_metrics
 from verl.utils.py_functional import rename_dict
-from verl.utils.rollout_skip import RolloutSkip
+try:
+    from verl.utils.rollout_skip import RolloutSkip
+except ImportError:
+    RolloutSkip = None
 from verl.utils.seqlen_balancing import calculate_workload, get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
@@ -1405,7 +1408,7 @@ class RayPPOTrainer:
                 self._shutdown_dump_executor()
                 return
 
-        if self.config.actor_rollout_ref.rollout.skip.get("enable", False):
+        if RolloutSkip is not None and self.config.actor_rollout_ref.rollout.skip.get("enable", False):
             rollout_skip = RolloutSkip(self.config, self.async_rollout_manager)
             rollout_skip.wrap_generate_sequences()
 
