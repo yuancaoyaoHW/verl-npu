@@ -13,7 +13,7 @@ tar xzf haidass-opd-deploy.tar.gz
 # 2. 启动容器
 echo "[2/5] 启动容器..."
 docker run -d --name verl-vllm \
-  --network host --privileged --shm-size 32g \
+  --network host --privileged --ipc=host --shm-size 32g \
   --device=/dev/davinci0 --device=/dev/davinci1 --device=/dev/davinci2 --device=/dev/davinci3 \
   --device=/dev/davinci4 --device=/dev/davinci5 --device=/dev/davinci6 --device=/dev/davinci7 \
   --device=/dev/davinci_manager \
