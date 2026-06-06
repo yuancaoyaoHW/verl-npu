@@ -19,6 +19,23 @@ docker run -d --name verl-vllm \
   -v /home:/home -v /mnt:/mnt -v /tmp:/tmp \
   -e ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   -e NPU_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e NCCL_P2P_DISABLE=1 \
+  -e HCCL_BUFFSIZE=300 \
+  -e HCCL_P2P_DISABLE=1 \
   quay.io/ascend/vllm-ascend:v0.18.0 \
   sleep infinity
 
