@@ -30,22 +30,32 @@ docker run -d --name verl-vllm \
   sleep infinity
 
 # 3. 复制代码到容器
-echo "[3/5] 复制 verl 源码和 patches..."
+echo "[3/6] 复制 verl 源码和 patches..."
 docker cp verl-src verl-vllm:/opt/verl
 docker cp patches verl-vllm:/opt/patches
 docker cp apply-patches.sh verl-vllm:/opt/
 docker cp run_opd.sh verl-vllm:/root/
 
-# 4. 安装 verl 并应用 patches
-echo "[4/5] 安装 verl 并应用 patches..."
-docker exec verl-vllm bash -c "cd /opt/verl && pip install -e . --no-deps && bash /opt/apply-patches.sh"
+# 4. 复制 Cascade RL 脚本
+echo "[4/6] 复制 Cascade RL 脚本..."
+docker cp cascade verl-vllm:/root/cascade
 
-# 5. 启动 Ray
-echo "[5/5] 启动 Ray..."
+# 5. 安装 verl, patches, 和 reward 依赖
+echo "[5/6] 安装 verl 并应用 patches..."
+docker exec verl-vllm bash -c "cd /opt/verl && pip install -e . --no-deps && bash /opt/apply-patches.sh && pip install 'math-verify[antlr4_11_0]==0.7.0' sympy requests"
+
+# 6. 启动 Ray
+echo "[6/6] 启动 Ray..."
 docker exec verl-vllm bash -c "ray start --head --port=6379 --disable-usage-stats"
 
 echo ""
 echo "=== 部署完成 ==="
-echo "启动训练: docker exec -d verl-vllm bash -c 'nohup bash /root/run_opd.sh > /home/admin/train_opd.log 2>&1 &'"
+echo ""
+echo "单域 OPD 训练 (GSM8K):"
+echo "  docker exec -d verl-vllm bash -c 'nohup bash /root/run_opd.sh > /home/admin/train_opd.log 2>&1 &'"
+echo ""
+echo "Cascade RL 多域训练 (Math→Science→Code→Tool):"
+echo "  docker exec -d verl-vllm bash -c 'nohup bash /root/cascade/run_all_stages.sh > /home/admin/train_cascade.log 2>&1 &'"
+echo ""
 echo "查看日志: docker exec verl-vllm tail -f /home/admin/train_opd.log"
 echo "NPU 状态: docker exec verl-vllm npu-smi info"

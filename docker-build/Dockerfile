@@ -7,12 +7,14 @@ COPY verl-src/ /opt/verl/
 COPY patches/ /opt/patches/
 COPY apply-patches.sh /opt/
 
-# Copy training script
+# Copy training scripts
 COPY run_opd.sh /root/
+COPY cascade/ /root/cascade/
 
-# Install verl and apply patches
+# Install verl, apply patches, and install reward dependencies
 RUN cd /opt/verl && pip install -e . --no-deps && \
-    bash /opt/apply-patches.sh
+    bash /opt/apply-patches.sh && \
+    pip install "math-verify[antlr4_11_0]==0.7.0" sympy requests
 
 # Set working directory
 WORKDIR /opt/verl
