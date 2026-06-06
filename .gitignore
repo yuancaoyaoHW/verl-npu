@@ -10,7 +10,6 @@ __pycache__/
 *.pyo
 
 # Docker build artifacts
-docker-build/verl-src/
 
 # Monitoring logs
 /tmp/*.log
