@@ -21,7 +21,7 @@ export HCCL_BUFFSIZE=300
 # ---- Quick Config ----
 STUDENT_MODEL_PATH=/home/models/Haidass
 TEACHER_MODEL_PATH=/home/models/Qwen3.6-35B-A3B
-TOKENIZER_PATH=/home/train/Qwen3-0.6B
+TOKENIZER_PATH=/home/models/Qwen3-0.6B
 
 # GPU分配: 4 (student) + 4 (teacher) = 8
 STUDENT_NGPUS=4

@@ -19,7 +19,7 @@ export VLLM_USE_V1=1
 
 STUDENT_MODEL_PATH=/home/models/Haidass
 TEACHER_MODEL_PATH=/home/models/Qwen3.6-35B-A3B
-TOKENIZER_PATH=/home/train/Qwen3-0.6B
+TOKENIZER_PATH=/home/models/Qwen3-0.6B
 
 STUDENT_NGPUS=4
 TEACHER_NGPUS=4
