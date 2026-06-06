@@ -15,3 +15,6 @@ docker-build/verl-src/
 # Monitoring logs
 /tmp/*.log
 .env
+
+# Downloaded datasets (large binary)
+datasets/

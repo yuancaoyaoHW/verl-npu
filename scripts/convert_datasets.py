@@ -76,24 +76,39 @@ def convert_gsm8k(input_path: str, max_samples: int = None) -> pd.DataFrame:
     print(f"  Loading GSM8K from {input_path}...")
     df = pd.read_parquet(input_path)
 
-    # GSM8K already has the right format, just add system prompt
     system_prompt = get_system_prompt("math")
-    new_prompts = []
-    for prompt in df["prompt"]:
+    rows = []
+    for _, row in df.iterrows():
+        prompt = row["prompt"]
         if isinstance(prompt, list) and len(prompt) > 0:
             if prompt[0].get("role") != "system":
                 prompt = [{"role": "system", "content": system_prompt}] + prompt
-        new_prompts.append(prompt)
 
-    df["prompt"] = new_prompts
-    df["data_source"] = "math/gsm8k"
-    df["ability"] = "math"
+        gt = row.get("reward_model", {})
+        ground_truth = gt.get("ground_truth", "") if isinstance(gt, dict) else str(gt)
 
-    if max_samples and len(df) > max_samples:
-        df = df.sample(n=max_samples, random_state=42).reset_index(drop=True)
+        ei = row.get("extra_info", {})
+        if not isinstance(ei, dict):
+            ei = {}
 
-    print(f"  GSM8K: {len(df)} samples")
-    return df
+        rows.append({
+            "data_source": "math/gsm8k",
+            "prompt": prompt,
+            "ability": "math",
+            "reward_model": {"ground_truth": str(ground_truth), "style": "rule"},
+            "extra_info": {
+                "difficulty": ei.get("difficulty", 0),
+                "topic": ei.get("topic", "GSM8K"),
+                "split": "train",
+            },
+        })
+
+    result = pd.DataFrame(rows)
+    if max_samples and len(result) > max_samples:
+        result = result.sample(n=max_samples, random_state=42).reset_index(drop=True)
+
+    print(f"  GSM8K: {len(result)} samples")
+    return result
 
 
 def convert_deepmath(input_dir: str, min_difficulty: float = 6.0, max_samples: int = None) -> pd.DataFrame:
@@ -145,12 +160,12 @@ def convert_deepmath(input_dir: str, min_difficulty: float = 6.0, max_samples: i
             "data_source": "math/deepmath",
             "prompt": prompt,
             "ability": "math",
-            "reward_model": json.dumps({"ground_truth": str(answer), "style": "rule"}),
-            "extra_info": json.dumps({
+            "reward_model": {"ground_truth": str(answer), "style": "rule"},
+            "extra_info": {
                 "difficulty": row.get("difficulty", 0),
                 "topic": row.get("topic", ""),
-                "solution": solution[:500] if solution else "",
-            }),
+                "split": "train",
+            },
         })
 
     result = pd.DataFrame(rows)
@@ -194,6 +209,18 @@ def convert_sciknow(input_dir: str, level: str = "L3", max_samples: int = None) 
         question = row.get("question", row.get("input", row.get("text", "")))
         answer = row.get("answer", row.get("output", row.get("label", "")))
         domain = row.get("domain", row.get("subject", "science"))
+        task_type = row.get("task_type", row.get("type", "mcq-4-choices"))
+
+        choices = {}
+        if "choices" in row:
+            c = row["choices"]
+            if isinstance(c, dict):
+                choices = c
+            elif isinstance(c, str):
+                try:
+                    choices = json.loads(c)
+                except json.JSONDecodeError:
+                    pass
 
         prompt = [
             {"role": "system", "content": system_prompt},
@@ -201,15 +228,16 @@ def convert_sciknow(input_dir: str, level: str = "L3", max_samples: int = None) 
         ]
 
         rows.append({
-            "data_source": f"science/sciknow",
+            "data_source": "science/sciknow",
             "prompt": prompt,
             "ability": "science",
-            "reward_model": json.dumps({"ground_truth": str(answer), "style": "rule"}),
-            "extra_info": json.dumps({
+            "reward_model": {"ground_truth": str(answer), "style": "rule"},
+            "extra_info": {
+                "type": task_type,
                 "domain": domain,
                 "level": row.get("level", ""),
-                "task_type": row.get("task_type", row.get("type", "")),
-            }),
+                "choices": choices,
+            },
         })
 
     result = pd.DataFrame(rows)
@@ -246,11 +274,56 @@ def convert_livecode(input_dir: str, release: str = "release_v6", max_samples: i
     rows = []
     for _, row in df.iterrows():
         question = row.get("question_content", row.get("problem", row.get("question", "")))
-        tests = row.get("public_test_cases", row.get("tests", ""))
+        tests = row.get("public_test_cases", row.get("tests", []))
+        starter_code = row.get("starter_code", row.get("partial_solution", ""))
+        platform = row.get("platform", row.get("source", ""))
+        difficulty = row.get("difficulty", "")
+
+        test_cases = []
+        if isinstance(tests, list):
+            for tc in tests:
+                if isinstance(tc, dict):
+                    test_cases.append({
+                        "input": str(tc.get("input", tc.get("test_input", ""))),
+                        "output": str(tc.get("output", tc.get("expected_output", ""))),
+                        "testtype": "functional" if starter_code else "stdin",
+                    })
+                elif isinstance(tc, str):
+                    try:
+                        parsed = json.loads(tc)
+                        if isinstance(parsed, dict):
+                            test_cases.append({
+                                "input": str(parsed.get("input", "")),
+                                "output": str(parsed.get("output", "")),
+                                "testtype": "functional" if starter_code else "stdin",
+                            })
+                    except json.JSONDecodeError:
+                        pass
+        elif isinstance(tests, str) and tests:
+            try:
+                parsed_tests = json.loads(tests)
+                if isinstance(parsed_tests, list):
+                    for tc in parsed_tests:
+                        if isinstance(tc, dict):
+                            test_cases.append({
+                                "input": str(tc.get("input", "")),
+                                "output": str(tc.get("output", "")),
+                                "testtype": "functional" if starter_code else "stdin",
+                            })
+            except json.JSONDecodeError:
+                pass
+
+        func_name = ""
+        if starter_code:
+            import re as _re
+            fn_match = _re.search(r"def\s+(\w+)\s*\(", starter_code)
+            if fn_match:
+                func_name = fn_match.group(1)
 
         user_content = str(question)
-        if tests:
-            user_content += f"\n\nExample test cases:\n{str(tests)[:500]}"
+        if test_cases and not starter_code:
+            sample_tests = test_cases[:2]
+            user_content += "\n\nExample test cases:\n" + json.dumps(sample_tests, ensure_ascii=False)[:500]
         user_content += "\n\nWrite a Python solution. Put your code in ```python``` blocks."
 
         prompt = [
@@ -262,13 +335,14 @@ def convert_livecode(input_dir: str, release: str = "release_v6", max_samples: i
             "data_source": "code/livecode",
             "prompt": prompt,
             "ability": "code",
-            "reward_model": json.dumps({"ground_truth": "", "style": "code"}),
-            "extra_info": json.dumps({
-                "problem_id": row.get("question_id", row.get("id", "")),
-                "difficulty": row.get("difficulty", ""),
-                "release": row.get("release", ""),
-                "platform": row.get("platform", ""),
-            }),
+            "reward_model": {"ground_truth": json.dumps(test_cases), "style": "code"},
+            "extra_info": {
+                "starter_code": starter_code,
+                "test_cases": test_cases,
+                "metadata": {"func_name": func_name} if func_name else {},
+                "platform": platform,
+                "difficulty": difficulty,
+            },
         })
 
     result = pd.DataFrame(rows)
@@ -305,6 +379,12 @@ def convert_toolalpaca(input_dir: str, max_samples: int = None) -> pd.DataFrame:
         user_request = item.get("user_request", item.get("query", ""))
         api_desc = json.dumps(apis, ensure_ascii=False)[:1000] if apis else ""
 
+        api_name = apis[0].get("name", "") if apis else ""
+        tool_names = [a.get("name", "") for a in apis]
+        nl_doc = ""
+        if apis:
+            nl_doc = apis[0].get("description", apis[0].get("nl_documentation", ""))
+
         user_content = user_request
         if api_desc:
             user_content = f"Available tools:\n{api_desc}\n\nUser request: {user_request}"
@@ -314,18 +394,19 @@ def convert_toolalpaca(input_dir: str, max_samples: int = None) -> pd.DataFrame:
             {"role": "user", "content": user_content},
         ]
 
-        # Ground truth: the expected tool calls
         gt = item.get("answer", item.get("expected_output", ""))
+        intermediate_steps = item.get("intermediate_steps", gt)
 
         rows.append({
             "data_source": "tool/toolalpaca",
             "prompt": prompt,
             "ability": "tool_use",
-            "reward_model": json.dumps({"ground_truth": str(gt), "style": "rule"}),
-            "extra_info": json.dumps({
-                "num_apis": len(apis),
-                "api_names": [a.get("name", "") for a in apis[:5]],
-            }),
+            "reward_model": {"ground_truth": json.dumps(intermediate_steps), "style": "rule"},
+            "extra_info": {
+                "api_name": api_name,
+                "tool_names": tool_names,
+                "nl_documentation": nl_doc,
+            },
         })
 
     result = pd.DataFrame(rows)
@@ -347,6 +428,78 @@ CONVERTERS = {
     "livecode": convert_livecode,
     "toolalpaca": convert_toolalpaca,
 }
+
+
+def validate_dataset(df: pd.DataFrame, name: str = "") -> bool:
+    """Validate that a converted dataset has correct schema for verl.
+
+    Checks:
+    1. Required columns exist: data_source, prompt, ability, reward_model
+    2. reward_model is a dict (not JSON string) with ground_truth key
+    3. extra_info is a dict (not JSON string) if present
+    4. prompt is a list of dicts with role/content keys
+    5. ground_truth is not empty (except for code domain where test_cases may be in extra_info)
+    """
+    required_cols = {"data_source", "prompt", "ability", "reward_model"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        print(f"  ❌ [{name}] Missing columns: {missing}")
+        return False
+
+    errors = 0
+    warnings = 0
+
+    for i, row in df.iterrows():
+        # Check reward_model is dict
+        rm = row.get("reward_model")
+        if isinstance(rm, str):
+            print(f"  ❌ [{name}] Row {i}: reward_model is JSON string, must be dict")
+            errors += 1
+            if errors > 5:
+                print(f"  ... (suppressing further row-level errors)")
+                break
+            continue
+        if not isinstance(rm, dict):
+            print(f"  ❌ [{name}] Row {i}: reward_model type={type(rm).__name__}, expected dict")
+            errors += 1
+            continue
+
+        # Check ground_truth exists
+        if "ground_truth" not in rm:
+            print(f"  ❌ [{name}] Row {i}: reward_model missing 'ground_truth' key")
+            errors += 1
+            continue
+
+        # Check ground_truth not empty (except code domain)
+        gt = rm["ground_truth"]
+        ds = row.get("data_source", "")
+        if not ds.startswith("code/") and (gt is None or str(gt).strip() == ""):
+            print(f"  ⚠️  [{name}] Row {i}: empty ground_truth (data_source={ds})")
+            warnings += 1
+
+        # Check extra_info is dict if present
+        ei = row.get("extra_info")
+        if ei is not None and isinstance(ei, str):
+            print(f"  ❌ [{name}] Row {i}: extra_info is JSON string, must be dict")
+            errors += 1
+
+        # Check prompt format
+        prompt = row.get("prompt")
+        if not hasattr(prompt, '__len__') or len(prompt) == 0:
+            print(f"  ❌ [{name}] Row {i}: prompt must be non-empty list")
+            errors += 1
+        elif not isinstance(prompt[0], dict) or "role" not in prompt[0]:
+            print(f"  ❌ [{name}] Row {i}: prompt[0] missing 'role' key")
+            errors += 1
+
+        if errors > 5:
+            print(f"  ... (suppressing further errors)")
+            break
+
+    ok = errors == 0
+    status = "✅" if ok else "❌"
+    print(f"  {status} [{name}] Validation: {errors} errors, {warnings} warnings, {len(df)} rows")
+    return ok
 
 
 def main():
@@ -406,6 +559,7 @@ def main():
             df = convert_toolalpaca(str(data_dir / "ToolAlpaca"), args.max_samples)
 
         if len(df) > 0:
+            validate_dataset(df, name)
             all_dfs.append(df)
 
             if args.no_merge:
