@@ -42,7 +42,7 @@ docker cp cascade verl-vllm:/root/cascade
 
 # 5. 安装 verl, patches, 和 reward 依赖
 echo "[5/6] 安装 verl 并应用 patches..."
-docker exec verl-vllm bash -c "cd /opt/verl && pip install -e . --no-deps && bash /opt/apply-patches.sh && pip install 'math-verify[antlr4_11_0]==0.7.0' sympy requests"
+docker exec verl-vllm bash -c "cd /opt/verl && pip install -e . --no-deps && bash /opt/apply-patches.sh && pip install 'math-verify[antlr4_11_0]==0.7.0' sympy requests tensordict omegaconf hydra-core codetiming datasets torchdata peft"
 
 # 6. 启动 Ray
 echo "[6/6] 启动 Ray..."

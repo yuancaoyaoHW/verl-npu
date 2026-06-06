@@ -14,7 +14,8 @@ COPY cascade/ /root/cascade/
 # Install verl, apply patches, and install reward dependencies
 RUN cd /opt/verl && pip install -e . --no-deps && \
     bash /opt/apply-patches.sh && \
-    pip install "math-verify[antlr4_11_0]==0.7.0" sympy requests
+    pip install "math-verify[antlr4_11_0]==0.7.0" sympy requests \
+    tensordict omegaconf hydra-core codetiming datasets torchdata peft
 
 # Set working directory
 WORKDIR /opt/verl
