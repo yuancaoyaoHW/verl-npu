@@ -176,66 +176,66 @@ def convert_deepmath(input_dir: str, min_difficulty: float = 6.0, max_samples: i
     return result
 
 
-def convert_sciknow(input_dir: str, level: str = "L3", max_samples: int = None) -> pd.DataFrame:
-    """Convert SciKnowEval to verl format with science system prompt."""
+def convert_sciknow(input_dir: str, level: str = None, max_samples: int = None) -> pd.DataFrame:
     print(f"  Loading SciKnowEval from {input_dir}...")
 
-    try:
-        from datasets import load_dataset
-        ds = load_dataset(input_dir, split="train")
-        df = ds.to_pandas()
-    except Exception:
+    train_file = os.path.join(input_dir, "data", "v1", "sciknoweval_test_v1.jsonl")
+    if not os.path.exists(train_file):
         import glob
-        files = glob.glob(os.path.join(input_dir, "**/*.parquet"), recursive=True)
-        if not files:
-            files = glob.glob(os.path.join(input_dir, "**/*.json*"), recursive=True)
-        if not files:
-            print(f"  ERROR: Cannot find data files in {input_dir}")
-            return pd.DataFrame()
-        if files[0].endswith(".parquet"):
-            df = pd.concat([pd.read_parquet(f) for f in sorted(files)])
-        else:
-            df = pd.concat([pd.read_json(f, lines=True) for f in sorted(files)])
+        candidates = glob.glob(os.path.join(input_dir, "**/*v1*.jsonl"), recursive=True)
+        train_file = candidates[0] if candidates else None
 
-    # Filter by level if column exists
-    if "level" in df.columns:
-        before = len(df)
-        df = df[df["level"] == level].reset_index(drop=True)
-        print(f"  Filtered level={level}: {before} -> {len(df)}")
+    if not train_file or not os.path.exists(train_file):
+        print(f"  ERROR: Cannot find SciKnowEval v1 JSONL in {input_dir}")
+        return pd.DataFrame()
+
+    with open(train_file) as f:
+        records = [json.loads(line) for line in f if line.strip()]
+
+    print(f"  Loaded {len(records)} records from v1")
 
     system_prompt = get_system_prompt("science")
     rows = []
-    for _, row in df.iterrows():
-        question = row.get("question", row.get("input", row.get("text", "")))
-        answer = row.get("answer", row.get("output", row.get("label", "")))
-        domain = row.get("domain", row.get("subject", "science"))
-        task_type = row.get("task_type", row.get("type", "mcq-4-choices"))
+    for rec in records:
+        task_type = rec.get("type", "mcq-4-choices")
+        domain = rec.get("domain", "science")
+        details = rec.get("details", {})
+        rec_level = details.get("level", "")
 
-        choices = {}
-        if "choices" in row:
-            c = row["choices"]
-            if isinstance(c, dict):
-                choices = c
-            elif isinstance(c, str):
-                try:
-                    choices = json.loads(c)
-                except json.JSONDecodeError:
-                    pass
+        if level and rec_level != level:
+            continue
+
+        answer_key = rec.get("answerKey", "")
+        answer_text = rec.get("answer", "")
+        ground_truth = answer_key if answer_key else answer_text
+
+        question = rec.get("question", "")
+        choices = rec.get("choices", {})
+
+        if task_type in ("mcq-4-choices", "mcq-2-choices") and choices:
+            choice_text = choices.get("text", [])
+            choice_labels = choices.get("label", [])
+            options_str = "\n".join(
+                f"{l}. {t}" for l, t in zip(choice_labels, choice_text)
+            )
+            user_content = f"{question}\n\n{options_str}"
+        else:
+            user_content = question
 
         prompt = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": str(question)},
+            {"role": "user", "content": user_content},
         ]
 
         rows.append({
             "data_source": "science/sciknow",
             "prompt": prompt,
             "ability": "science",
-            "reward_model": {"ground_truth": str(answer), "style": "rule"},
+            "reward_model": {"ground_truth": str(ground_truth), "style": "rule"},
             "extra_info": {
                 "type": task_type,
                 "domain": domain,
-                "level": row.get("level", ""),
+                "level": rec_level,
                 "choices": choices,
             },
         })
@@ -248,82 +248,68 @@ def convert_sciknow(input_dir: str, level: str = "L3", max_samples: int = None) 
     return result
 
 
-def convert_livecode(input_dir: str, release: str = "release_v6", max_samples: int = None) -> pd.DataFrame:
-    """Convert LiveCodeBench to verl format with code system prompt."""
+def convert_livecode(input_dir: str, release: str = None, max_samples: int = None) -> pd.DataFrame:
     print(f"  Loading LiveCodeBench from {input_dir}...")
 
-    try:
-        from datasets import load_dataset
-        ds = load_dataset(input_dir, split="test")
-        df = ds.to_pandas()
-    except Exception:
-        import glob
-        files = glob.glob(os.path.join(input_dir, "**/*.parquet"), recursive=True)
-        if not files:
-            print(f"  ERROR: Cannot find data files in {input_dir}")
-            return pd.DataFrame()
-        df = pd.concat([pd.read_parquet(f) for f in sorted(files)])
+    import glob
+    import re as _re
 
-    # Filter by release if column exists
-    if "release" in df.columns:
-        before = len(df)
-        df = df[df["release"] == release].reset_index(drop=True)
-        print(f"  Filtered release={release}: {before} -> {len(df)}")
+    jsonl_files = sorted(glob.glob(os.path.join(input_dir, "test*.jsonl")))
+    jsonl_files = [f for f in jsonl_files if os.path.getsize(f) > 0]
+
+    if not jsonl_files:
+        print(f"  ERROR: No non-empty JSONL files found in {input_dir}")
+        return pd.DataFrame()
+
+    records = []
+    skipped = 0
+    for fpath in jsonl_files:
+        with open(fpath) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    skipped += 1
+    if skipped:
+        print(f"  Skipped {skipped} malformed lines")
+
+    print(f"  Loaded {len(records)} records from {len(jsonl_files)} files")
 
     system_prompt = get_system_prompt("code")
     rows = []
-    for _, row in df.iterrows():
-        question = row.get("question_content", row.get("problem", row.get("question", "")))
-        tests = row.get("public_test_cases", row.get("tests", []))
-        starter_code = row.get("starter_code", row.get("partial_solution", ""))
-        platform = row.get("platform", row.get("source", ""))
-        difficulty = row.get("difficulty", "")
+    for rec in records:
+        question = rec.get("question_content", "")
+        starter_code = rec.get("starter_code", "")
+        platform = rec.get("platform", "")
+        difficulty = rec.get("difficulty", "")
+        question_id = rec.get("question_id", "")
 
+        raw_tests = rec.get("public_test_cases", "[]")
         test_cases = []
-        if isinstance(tests, list):
-            for tc in tests:
-                if isinstance(tc, dict):
-                    test_cases.append({
-                        "input": str(tc.get("input", tc.get("test_input", ""))),
-                        "output": str(tc.get("output", tc.get("expected_output", ""))),
-                        "testtype": "functional" if starter_code else "stdin",
-                    })
-                elif isinstance(tc, str):
-                    try:
-                        parsed = json.loads(tc)
-                        if isinstance(parsed, dict):
-                            test_cases.append({
-                                "input": str(parsed.get("input", "")),
-                                "output": str(parsed.get("output", "")),
-                                "testtype": "functional" if starter_code else "stdin",
-                            })
-                    except json.JSONDecodeError:
-                        pass
-        elif isinstance(tests, str) and tests:
+        if isinstance(raw_tests, str):
             try:
-                parsed_tests = json.loads(tests)
-                if isinstance(parsed_tests, list):
-                    for tc in parsed_tests:
-                        if isinstance(tc, dict):
-                            test_cases.append({
-                                "input": str(tc.get("input", "")),
-                                "output": str(tc.get("output", "")),
-                                "testtype": "functional" if starter_code else "stdin",
-                            })
+                parsed = json.loads(raw_tests)
+                if isinstance(parsed, list):
+                    test_cases = parsed
             except json.JSONDecodeError:
                 pass
+        elif isinstance(raw_tests, list):
+            test_cases = raw_tests
 
         func_name = ""
         if starter_code:
-            import re as _re
             fn_match = _re.search(r"def\s+(\w+)\s*\(", starter_code)
             if fn_match:
                 func_name = fn_match.group(1)
 
-        user_content = str(question)
+        user_content = question
+        if starter_code:
+            user_content += f"\n\nStarter code:\n```python\n{starter_code}\n```"
         if test_cases and not starter_code:
-            sample_tests = test_cases[:2]
-            user_content += "\n\nExample test cases:\n" + json.dumps(sample_tests, ensure_ascii=False)[:500]
+            user_content += "\n\nExample test cases:\n" + json.dumps(test_cases[:2], ensure_ascii=False)[:500]
         user_content += "\n\nWrite a Python solution. Put your code in ```python``` blocks."
 
         prompt = [
@@ -354,20 +340,17 @@ def convert_livecode(input_dir: str, release: str = "release_v6", max_samples: i
 
 
 def convert_toolalpaca(input_dir: str, max_samples: int = None) -> pd.DataFrame:
-    """Convert ToolAlpaca to verl format with tool-use system prompt."""
     print(f"  Loading ToolAlpaca from {input_dir}...")
 
     train_file = os.path.join(input_dir, "data", "train_data.json")
     if not os.path.exists(train_file):
-        train_file = os.path.join(input_dir, "train_data.json")
-    if not os.path.exists(train_file):
         import glob
         candidates = glob.glob(os.path.join(input_dir, "**/*train*.json"), recursive=True)
-        if candidates:
-            train_file = candidates[0]
-        else:
-            print(f"  ERROR: Cannot find train_data.json in {input_dir}")
-            return pd.DataFrame()
+        train_file = candidates[0] if candidates else None
+
+    if not train_file or not os.path.exists(train_file):
+        print(f"  ERROR: Cannot find train_data.json in {input_dir}")
+        return pd.DataFrame()
 
     with open(train_file) as f:
         data = json.load(f)
@@ -375,39 +358,37 @@ def convert_toolalpaca(input_dir: str, max_samples: int = None) -> pd.DataFrame:
     system_prompt = get_system_prompt("tool_use")
     rows = []
     for item in data:
-        apis = item.get("api_list", [])
-        user_request = item.get("user_request", item.get("query", ""))
-        api_desc = json.dumps(apis, ensure_ascii=False)[:1000] if apis else ""
+        api_name = item.get("Name", "")
+        functions_desc = item.get("Functions", "")
+        nl_doc = item.get("NLDocumentation", "")
+        instances = item.get("Instances", [])
 
-        api_name = apis[0].get("name", "") if apis else ""
-        tool_names = [a.get("name", "") for a in apis]
-        nl_doc = ""
-        if apis:
-            nl_doc = apis[0].get("description", apis[0].get("nl_documentation", ""))
+        for inst in instances:
+            user_request = inst.get("input", "")
+            intermediate_steps = inst.get("intermediate_steps", [])
 
-        user_content = user_request
-        if api_desc:
-            user_content = f"Available tools:\n{api_desc}\n\nUser request: {user_request}"
+            tool_context = f"API: {api_name}\n\nAvailable functions:\n{functions_desc}"
+            if nl_doc:
+                tool_context += f"\n\nDocumentation:\n{nl_doc[:500]}"
 
-        prompt = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ]
+            user_content = f"{tool_context}\n\nUser request: {user_request}"
 
-        gt = item.get("answer", item.get("expected_output", ""))
-        intermediate_steps = item.get("intermediate_steps", gt)
+            prompt = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ]
 
-        rows.append({
-            "data_source": "tool/toolalpaca",
-            "prompt": prompt,
-            "ability": "tool_use",
-            "reward_model": {"ground_truth": json.dumps(intermediate_steps), "style": "rule"},
-            "extra_info": {
-                "api_name": api_name,
-                "tool_names": tool_names,
-                "nl_documentation": nl_doc,
-            },
-        })
+            rows.append({
+                "data_source": "tool/toolalpaca",
+                "prompt": prompt,
+                "ability": "tool_use",
+                "reward_model": {"ground_truth": json.dumps(intermediate_steps), "style": "rule"},
+                "extra_info": {
+                    "api_name": api_name,
+                    "tool_names": [api_name],
+                    "nl_documentation": nl_doc[:200] if nl_doc else "",
+                },
+            })
 
     result = pd.DataFrame(rows)
     if max_samples and len(result) > max_samples:
@@ -571,7 +552,23 @@ def main():
         print("\nERROR: No datasets converted.")
         sys.exit(1)
 
-    # Merge
+    if args.no_merge:
+        print(f"\n{'='*50}")
+        print(f"Individual datasets saved (--no-merge)")
+        print(f"{'='*50}")
+        for df in all_dfs:
+            src = df.iloc[0]["data_source"]
+            print(f"  {src}: {len(df)} samples")
+        return
+
+    # Merge: serialize dict columns to JSON strings to avoid PyArrow type conflicts
+    for df in all_dfs:
+        for col in ["reward_model", "extra_info"]:
+            if col in df.columns:
+                df[col] = df[col].apply(
+                    lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, dict) else x
+                )
+
     merged = pd.concat(all_dfs, ignore_index=True)
 
     print(f"\n{'='*50}")
